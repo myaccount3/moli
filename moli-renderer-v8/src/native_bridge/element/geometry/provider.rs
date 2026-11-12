@@ -82,8 +82,8 @@ fn is_svg_geometry_query(runtime: &PageScriptHost, query: &LayoutQuery<DomHandle
         .is_some_and(|element| element.namespace() == "http://www.w3.org/2000/svg")
 }
 
-/// Style and observer sampling never initializes layout as a side effect.
-pub(crate) fn published_geometry_batch(
+/// Style sampling never initializes layout as a side effect.
+fn published_geometry_batch(
     runtime: &PageScriptHost,
     document: DomHandle,
     batch: &LayoutQueryBatch<DomHandle>,
