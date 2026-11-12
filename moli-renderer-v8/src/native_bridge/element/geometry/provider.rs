@@ -82,7 +82,7 @@ fn is_svg_geometry_query(runtime: &PageScriptHost, query: &LayoutQuery<DomHandle
         .is_some_and(|element| element.namespace() == "http://www.w3.org/2000/svg")
 }
 
-/// Style sampling never initializes layout as a side effect.
+/// Answers from the published layout only; callers initialize layout first.
 fn published_geometry_batch(
     runtime: &PageScriptHost,
     document: DomHandle,
