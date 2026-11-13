@@ -18,8 +18,8 @@ use moli_protocol::{
     BackgroundCommandResponsePayload, BackgroundProtocolEvent, CdpInitialStoragePartition,
     automation::{
         AutomationCommand, AutomationContext, AutomationEvent, AutomationResult,
-        DevToolsDomObjectReferenceCommand, DevToolsDomObjectReferenceOperation, DevToolsError,
-        DevToolsErrorKind, DevToolsFrameId, DevToolsGetBrowserContextsCommand,
+        DevToolsDomGeometryCommand, DevToolsDomGeometryOperation, DevToolsDomNodeReference,
+        DevToolsError, DevToolsErrorKind, DevToolsFrameId, DevToolsGetBrowserContextsCommand,
         DevToolsGetLayoutMetricsCommand, DevToolsGetRealmsCommand, DevToolsGetTargetInfoCommand,
         DevToolsNavigationWait, DevToolsRemoteHandleId, DevToolsSessionId,
         DevToolsSetFileInputFilesCommand, DevToolsTargetId, DevToolsTargetInfo, DevToolsTargetKind,
@@ -2712,21 +2712,39 @@ async fn bidi_input_element_origin_viewport_point(
     shared_id: &str,
     event_sources: &mut BidiDevToolsEventSources,
 ) -> Result<moli_protocol_webdriver_classic::ClassicViewportPoint, BidiInputPreparationError> {
-    let command = AutomationCommand::DomObjectReference(DevToolsDomObjectReferenceCommand {
-        context: AutomationContext {
-            protocol: FrontendProtocol::WebDriverBidi,
-            session_id: Some(DevToolsSessionId::from(session_id)),
-            target_id: Some(DevToolsTargetId::from(context_id)),
-            browser_context_id: None,
-        },
-        object_id: DevToolsRemoteHandleId::from(shared_id),
-        operation: DevToolsDomObjectReferenceOperation::GetBoxModel,
+    let context = AutomationContext {
+        protocol: FrontendProtocol::WebDriverBidi,
+        session_id: Some(DevToolsSessionId::from(session_id)),
+        target_id: Some(DevToolsTargetId::from(context_id)),
+        browser_context_id: None,
+    };
+    let reference = scheduler
+        .webdriver_node_reference(
+            &context,
+            shared_id,
+            moli_protocol::automation::WebDriverNodeKind::Element,
+        )
+        .map_err(BidiInputPreparationError::DevTools)?
+        .ok_or_else(|| {
+            BidiInputPreparationError::DevTools(DevToolsError::new(
+                DevToolsErrorKind::NoSuchNode,
+                "Could not find node with given id",
+            ))
+        })?;
+    let command = AutomationCommand::DomGeometry(DevToolsDomGeometryCommand {
+        context,
+        reference: DevToolsDomNodeReference::BackendNodeId(reference.backend_node_id),
+        operation: DevToolsDomGeometryOperation::GetBoxModel,
     });
     let execution = scheduler
-        .execute_automation_command_with_external_load_wait_and_protocol_messages(
-            receivers, command,
+        .execute_automation_command_with_external_load_wait_and_document_residence(
+            receivers,
+            command,
+            None,
+            Some(&reference.page_residence),
         )
-        .await;
+        .await
+        .execution;
     event_sources.extend_protocol_output(execution.protocol_output);
     match execution.result {
         Ok(AutomationResult::DomGeometry(geometry)) => {

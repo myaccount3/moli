@@ -14,7 +14,7 @@ async fn bidi_node_arguments_release_temporary_handles_on_success_and_error() {
         ctx.with_fixture(|conn| {
             conn.target_devtools_session_state_for_owner(&owner)
                 .unwrap()
-                .runtime_remote_object_ids
+                .bidi_handles
                 .clone()
         })
     };
@@ -482,7 +482,7 @@ async fn bidi_node_remote_value_registers_renderer_shared_node_binding() {
         "BiDi node remote value should carry renderer-owned backend id"
     );
 
-    ctx.with_fixture(|conn| conn.clear_runtime_remote_object_tracking_for_session_owner(None));
+    ctx.with_fixture(|conn| conn.clear_runtime_context_metadata_for_session_owner(None));
 
     let owner = ctx.with_fixture(|conn| CommandOwnerScope::capture(conn, None));
     let renderer_binding = {
@@ -648,7 +648,7 @@ async fn bidi_node_remote_value_registers_child_shared_node_bindings() {
         .unwrap_or_else(|| panic!("serialized child should expose sharedId: {node_value}"))
         .to_owned();
 
-    ctx.with_fixture(|conn| conn.clear_runtime_remote_object_tracking_for_session_owner(None));
+    ctx.with_fixture(|conn| conn.clear_runtime_context_metadata_for_session_owner(None));
 
     let owner = ctx.with_fixture(|conn| CommandOwnerScope::capture(conn, None));
     let renderer_binding = {
@@ -979,7 +979,7 @@ async fn bidi_exports_reject_raw_cdp_ids_and_retire_after_disown_and_navigation(
         DevToolsErrorKind::NoSuchHandle
     );
     let stale = ctx.with_fixture(|conn| {
-        conn.export_bidi_handle(&owner, native.clone(), realm.as_str())
+        conn.export_bidi_handle(&owner, native.clone(), realm.as_str(), None)
             .unwrap()
     });
     ctx.install_navigation_fixture_for_session_owner("about:blank", owner.session_id())

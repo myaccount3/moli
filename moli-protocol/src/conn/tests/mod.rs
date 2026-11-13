@@ -1512,14 +1512,10 @@ async fn memory_diagnostics_splits_pending_inspector_await_counts_by_target_owne
         browser_context.replace_loaded_page(Some(active_page));
         browser_context.active_page_target_mut().devtools_sessions
             [moli_page_types::DevToolsSessionKey::Primary]
-            .register_pending_inspector_await(10_001, Some("SID-pending-await-active"), None);
+            .register_pending_inspector_await(10_001, Some("SID-pending-await-active"));
         browser_context.active_page_target_mut().devtools_sessions
             [moli_page_types::DevToolsSessionKey::Primary]
-            .register_pending_inspector_await(
-                10_002,
-                Some("SID-pending-await-active"),
-                Some("active-group"),
-            );
+            .register_pending_inspector_await(10_002, Some("SID-pending-await-active"));
 
         let mut background = super::PageTargetHost::with_url(
             "TID-pending-await-bg".to_owned(),
@@ -1528,7 +1524,7 @@ async fn memory_diagnostics_splits_pending_inspector_await_counts_by_target_owne
         );
         background.replace_loaded_page(Some(background_page));
         background.devtools_sessions[moli_page_types::DevToolsSessionKey::Primary]
-            .register_pending_inspector_await(20_001, Some("SID-pending-await-bg"), None);
+            .register_pending_inspector_await(20_001, Some("SID-pending-await-bg"));
         browser_context.insert_page_target_host(background);
 
         let shared_worker_instance_id = SharedWorkerInstanceId::from_u64(30_001);
@@ -1545,7 +1541,6 @@ async fn memory_diagnostics_splits_pending_inspector_await_counts_by_target_owne
             "SID-pending-await-sw",
             30_001,
             Some("SID-pending-await-sw"),
-            None,
         );
         browser_context
             .shared_worker_targets
@@ -1566,7 +1561,6 @@ async fn memory_diagnostics_splits_pending_inspector_await_counts_by_target_owne
             "SID-pending-await-service-worker",
             40_001,
             Some("SID-pending-await-service-worker"),
-            None,
         );
         browser_context
             .service_worker_targets
