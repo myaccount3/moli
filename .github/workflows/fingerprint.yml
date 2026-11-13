@@ -1,0 +1,56 @@
+# TLS/HTTP2 fingerprint drift check (D5: observation period, non-blocking).
+#
+# Pins the JA4 + Akamai HTTP/2 hashes from fingerprint-baseline/expected.json.
+# Chrome randomizes extension order (JA3 is unstable), so only JA4 + Akamai are
+# asserted. Offline ClientHello/Akamai fixtures live in the spike workspace;
+# this job is the end-to-end online check against kittens.sh /api/clean.
+#
+# continue-on-error during the observation window: an unreachable endpoint or a
+# site-side change must not fail CI. Promote to required once stable.
+
+name: TLS fingerprint drift
+
+on:
+  pull_request:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain
+      - moli-curl/**
+      - moli-fetch/**
+      - moli/src/cli.rs
+      - moli/src/config.rs
+      - .github/workflows/fingerprint.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fingerprint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fingerprint:
+    name: JA4 / Akamai (kittens.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    env:
+      CARGO_INCREMENTAL: "0"
+      AWS_LC_SYS_STATIC: "1"
+      AWS_LC_SYS_USE_SYSTEM: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: |
+          toolchain=$(tr -d '[:space:]' < rust-toolchain)
+          rustup toolchain install "$toolchain" --profile minimal --no-self-update
+      - name: Build moli
+        run: cargo build --locked -p moli
+      - name: Assert pinned fingerprints
+        env:
+          MOLI_BIN: ${{ github.workspace }}/target/debug/moli
+        run: python3 scripts/check_fingerprint.py

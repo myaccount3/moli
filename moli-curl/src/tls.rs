@@ -1,7 +1,41 @@
-use std::{fmt, path::PathBuf};
+use std::{ffi::CString, fmt, path::PathBuf};
 
 use anyhow::{Context, Result};
 use curl::easy::{Easy2, Handler};
+
+/// Optional browser TLS/HTTP2 fingerprint profile.
+///
+/// When set, libcurl's vendored curl-impersonate subset is asked to emit a
+/// Chrome 152 ClientHello and HTTP/2 fingerprint (JA4 + Akamai). `None` keeps
+/// every default network behaviour unchanged (zero regression). The variant is
+/// compared as part of [`CurlTlsConfig`] equality so a profile switch rebuilds
+/// the resource runtime instead of reusing a pooled connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TlsProfileId {
+    /// Opt-in to no profile: keep moli's default ClientHello / HTTP2 settings.
+    #[default]
+    None,
+    Chrome152,
+}
+
+impl TlsProfileId {
+    /// Real Chrome 152 Windows build used when the profile is active (D3).
+    /// The TLS/H2 knobs come from curl-impersonate's chrome152 profile, but the
+    /// UA / Client Hints come from moli's own `BrowserIdentityProfile`, derived
+    /// from this string (never copied from curl-impersonate's placeholder UA).
+    pub const CHROME152_UA: &'static str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.85 Safari/537.36";
+
+    /// The `CURLOPT_IMPERSONATE` value understood by the vendored curl fork.
+    /// `:no` suppresses curl-impersonate's hardcoded UA/headers so moli keeps
+    /// generating its own user-agent and Client Hints from
+    /// `BrowserIdentityProfile` (D3). TLS and HTTP/2 knobs still apply.
+    fn curl_impersonate_target(self) -> Option<&'static str> {
+        match self {
+            Self::None => None,
+            Self::Chrome152 => Some("chrome152:no"),
+        }
+    }
+}
 
 /// Owned TLS settings shared by HTTP and WebSocket connections.
 #[derive(Clone, PartialEq, Eq)]
@@ -12,6 +46,8 @@ pub struct CurlTlsConfig {
     pub client_cert: Option<PathBuf>,
     pub client_key: Option<PathBuf>,
     pub client_cert_password: Option<String>,
+    /// Optional browser TLS/HTTP2 fingerprint profile (opt-in).
+    pub profile: TlsProfileId,
 }
 
 impl Default for CurlTlsConfig {
@@ -22,6 +58,7 @@ impl Default for CurlTlsConfig {
             client_cert: None,
             client_key: None,
             client_cert_password: None,
+            profile: TlsProfileId::None,
         }
     }
 }
@@ -33,6 +70,7 @@ impl fmt::Debug for CurlTlsConfig {
             .field("ca_cert", &self.ca_cert)
             .field("client_cert", &self.client_cert)
             .field("client_key", &self.client_key)
+            .field("profile", &self.profile)
             .field(
                 "client_cert_password",
                 &self.client_cert_password.as_ref().map(|_| "[REDACTED]"),
@@ -52,6 +90,10 @@ impl CurlTlsConfig {
         easy: &mut Easy2<H>,
         include_client_identity: bool,
     ) -> Result<()> {
+        // Apply the impersonation profile first: it configures most TLS and
+        // HTTP/2 options in one shot. Explicit verification/CA settings below
+        // are then layered on top and still win where they overlap.
+        self.apply_profile(easy)?;
         easy.ssl_verify_peer(self.verify)
             .context("failed to configure curl TLS peer verification")?;
         easy.ssl_verify_host(self.verify)
@@ -152,6 +194,31 @@ impl CurlTlsConfig {
         }
         Ok(())
     }
+
+    /// Activate the browser fingerprint profile on a fresh handle.
+    ///
+    /// Uses raw `curl_easy_setopt(CURLOPT_IMPERSONATE, "chrome152:no")` rather
+    /// than a typed curl-rust API: the option lives only in the vendored curl
+    /// fork. The `:no` suffix keeps moli's own user-agent / Client Hints (D3).
+    /// This is a no-op for `TlsProfileId::None`, which is the default.
+    fn apply_profile<H: Handler>(&self, easy: &mut Easy2<H>) -> Result<()> {
+        let Some(target) = self.profile.curl_impersonate_target() else {
+            return Ok(());
+        };
+        let target = CString::new(target).context("impersonation target is not valid C string")?;
+        // SAFETY: `easy.raw()` is a valid CURL handle exclusively borrowed by
+        // `&mut Easy2`, `target` is a NUL-terminated C string that outlives the
+        // call, and the vendored curl copies the option value into its own
+        // storage (Curl_setstropt). The option is CURLOPTTYPE_STRINGPOINT.
+        let result = unsafe {
+            curl_sys::curl_easy_setopt(easy.raw(), curl_sys::CURLOPT_IMPERSONATE, target.as_ptr())
+        };
+        if result != curl_sys::CURLE_OK {
+            return Err(curl::Error::new(result))
+                .context("failed to activate curl TLS/HTTP2 impersonation profile");
+        }
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -179,6 +246,34 @@ mod tests {
         };
         let debug = format!("{config:?}");
         assert!(!debug.contains("private-certificate-password"));
+        assert!(debug.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn default_profile_is_none_and_keeps_defaults_equal() {
+        let a = CurlTlsConfig::default();
+        let b = CurlTlsConfig::default();
+        assert_eq!(a.profile, TlsProfileId::None);
+        assert_eq!(a, b);
+        // A profile change must participate in equality so the resource
+        // runtime rebuilds instead of reusing a pooled connection.
+        let c = CurlTlsConfig {
+            profile: TlsProfileId::Chrome152,
+            ..CurlTlsConfig::default()
+        };
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn debug_includes_profile_without_leaking_secrets() {
+        let config = CurlTlsConfig {
+            profile: TlsProfileId::Chrome152,
+            client_cert_password: Some("secret".to_owned()),
+            ..CurlTlsConfig::default()
+        };
+        let debug = format!("{config:?}");
+        assert!(debug.contains("Chrome152"));
+        assert!(!debug.contains("secret"));
         assert!(debug.contains("[REDACTED]"));
     }
 }

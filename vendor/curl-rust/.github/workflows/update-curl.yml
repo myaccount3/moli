@@ -1,0 +1,39 @@
+# The bundled curl source is vendored directly in `curl-sys/curl/` (it carries
+# moli's fingerprint/impersonate and ECH patches), NOT tracked as a git
+# submodule. Automatically bumping to the latest upstream curl would silently
+# drop those patches. This workflow only reports that a newer upstream release
+# exists; updating the vendored tree is a manual, review-heavy task (see
+# docs / spike reports: re-apply the patch subsets and re-run the JA4/Akamai
+# fixtures before landing).
+
+name: Check curl upstream drift
+
+on:
+  schedule:
+    - cron: '0 12 * * 5'
+  workflow_dispatch:
+
+jobs:
+  report-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare vendored curl version against latest upstream release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -f curl-sys/curl/include/curl/curlver.h ]; then
+            echo "::error::vendored curl-sys/curl is missing (curlver.h not found)"
+            exit 1
+          fi
+          VENDORED=$(sed -n 's/^#define LIBCURL_VERSION "\(.*\)"/\1/p' \
+            curl-sys/curl/include/curl/curlver.h | head -1)
+          LATEST=$(gh release view --repo curl/curl --json tagName --jq .tagName)
+          echo "vendored curl: ${VENDORED}"
+          echo "latest upstream release: ${LATEST}"
+          if [ "${VENDORED}" != "${LATEST}" ]; then
+            echo "::warning::upstream curl ${LATEST} differs from vendored ${VENDORED}; "\
+                 "manually re-apply the fingerprint patches and re-run the JA4/Akamai "\
+                 "fixtures before updating. Do NOT bump via git submodule."
+          fi

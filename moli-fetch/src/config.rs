@@ -6,7 +6,7 @@ use std::{
 
 use cidr::AnyIpCidr;
 use moli_browser_profile::{BrowserIdentityProfile, DEFAULT_ACCEPT_LANGUAGE};
-use moli_curl::{CurlTlsConfig, NetworkAddressPolicy};
+use moli_curl::{CurlTlsConfig, NetworkAddressPolicy, TlsProfileId};
 
 use crate::{Request, WebBotAuthSigner};
 
@@ -235,6 +235,36 @@ impl FetchConfig {
         &self.tls
     }
 
+    /// Optional browser TLS/HTTP2 fingerprint profile (opt-in). Changing it
+    /// participates in `FetchConfig` equality and therefore rebuilds the
+    /// resource runtime instead of reusing a pooled connection.
+    pub fn tls_profile(&self) -> TlsProfileId {
+        self.tls.profile
+    }
+
+    /// Set the fingerprint profile and keep the browser identity coherent (D3).
+    ///
+    /// A profile switch is atomic with the user-agent / Client Hints change:
+    /// `BrowserIdentityProfile::new` derives sec-ch-ua brands, the full version
+    /// list and navigator metadata from the UA string, so TLS (152) and UA (152)
+    /// can never disagree. An explicit user-agent (or UA suffix) override always
+    /// wins: the identity is only swapped when the current UA is still one of
+    /// moli's own default / profile UAs, never a caller-supplied string.
+    pub fn set_tls_profile(&mut self, profile: TlsProfileId) {
+        let accept_language = self.browser_identity.accept_language().to_owned();
+        let current_ua = self.browser_identity.user_agent();
+        let identity_is_moli_owned =
+            current_ua == Self::DEFAULT_USER_AGENT || current_ua == TlsProfileId::CHROME152_UA;
+        if identity_is_moli_owned {
+            let ua = match profile {
+                TlsProfileId::None => Self::DEFAULT_USER_AGENT,
+                TlsProfileId::Chrome152 => TlsProfileId::CHROME152_UA,
+            };
+            self.browser_identity = BrowserIdentityProfile::new(ua, accept_language);
+        }
+        self.tls.profile = profile;
+    }
+
     /// Configure TLS trust and mutual-TLS credentials for this fetch runtime,
     /// including navigations and subresources. Client identities are used only
     /// when the request's credentials mode allows them for the current URL;
@@ -426,5 +456,63 @@ impl FetchConfig {
             .unwrap_or(DEFAULT_ACCEPT_LANGUAGE)
             .to_owned();
         self.browser_identity = self.browser_identity.with_accept_language(accept_language);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tls_profile_switch_is_coherent_with_browser_identity() {
+        let mut config = FetchConfig::default();
+        assert_eq!(config.tls_profile(), TlsProfileId::None);
+        assert_eq!(
+            config.browser_identity().user_agent(),
+            FetchConfig::DEFAULT_USER_AGENT
+        );
+
+        config.set_tls_profile(TlsProfileId::Chrome152);
+        assert_eq!(config.tls_profile(), TlsProfileId::Chrome152);
+        assert_eq!(
+            config.browser_identity().user_agent(),
+            TlsProfileId::CHROME152_UA
+        );
+        // sec-ch-ua / navigator metadata derive from the same UA string.
+        assert_eq!(config.browser_identity().major_version(), "152");
+        assert_eq!(config.browser_identity().full_version(), "152.0.7977.85");
+        assert!(
+            config
+                .browser_identity()
+                .sec_ch_ua_value()
+                .is_some_and(|value| value.contains("152"))
+        );
+
+        config.set_tls_profile(TlsProfileId::None);
+        assert_eq!(
+            config.browser_identity().user_agent(),
+            FetchConfig::DEFAULT_USER_AGENT
+        );
+    }
+
+    #[test]
+    fn explicit_user_agent_override_wins_over_profile() {
+        let mut config = FetchConfig::default();
+        config.set_user_agent("MyCustomAgent/1.0".to_owned());
+        config.set_tls_profile(TlsProfileId::Chrome152);
+        // TLS profile is active, but an explicit UA must not be overwritten.
+        assert_eq!(config.tls_profile(), TlsProfileId::Chrome152);
+        assert_eq!(config.browser_identity().user_agent(), "MyCustomAgent/1.0");
+    }
+
+    #[test]
+    fn profile_change_participates_in_config_equality() {
+        let mut a = FetchConfig::default();
+        let b = FetchConfig::default();
+        assert_eq!(a, b);
+        a.set_tls_profile(TlsProfileId::Chrome152);
+        // FetchConfig equality drives matches_config / runtime rebuild, so a
+        // profile switch must invalidate a pooled connection.
+        assert_ne!(a, b);
     }
 }

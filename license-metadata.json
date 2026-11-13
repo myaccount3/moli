@@ -3,5 +3,14 @@
   "license_files": [
     "LICENSE-APACHE",
     "LICENSE-MIT"
+  ],
+  "third_party_notices": [
+    {
+      "name": "curl-impersonate",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 curl_cffi developers",
+      "file": "licenses/curl-impersonate-MIT.txt",
+      "note": "Trimmed curl.patch subset vendored into the lexmount/curl-rust fork for the optional chrome152 TLS/HTTP2 fingerprint profile."
+    }
   ]
 }

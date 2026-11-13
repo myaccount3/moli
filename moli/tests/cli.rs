@@ -10,7 +10,7 @@ use std::{
 use moli::cli::{
     Cli, Commands, CommonArgs, DumpFormat, FetchArgs, FetchWaitUntil, LogLevel, RequestHeaderArg,
     ResponseJsonPathArg, ResponseRegexArg, ServeArgs, StripModeChoice, StripOptions,
-    WebBotAuthProfileChoice, normalize_args_for_compat,
+    TlsProfileChoice, WebBotAuthProfileChoice, normalize_args_for_compat,
 };
 use moli::config::AppConfig;
 use moli_browser_profile::BrowserProfilePaths;
@@ -119,6 +119,7 @@ fn parses_explicit_fetch_command_with_compatibility_flags() {
                 ca_cert: None,
                 client_cert: None,
                 client_key: None,
+                tls_profile: TlsProfileChoice::None,
                 obey_robots: true,
                 http_proxy: Some("http://proxy.internal:8080".to_owned()),
                 http_no_proxy: None,

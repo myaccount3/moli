@@ -1,0 +1,268 @@
+# curl-rust
+
+[libcurl] bindings for Rust
+
+Moli's fork is maintained at [lexmount/curl-rust](https://github.com/lexmount/curl-rust)
+on the `moli` branch. Moli-specific changes should be based on that branch.
+
+[![Latest Version](https://img.shields.io/crates/v/curl.svg)](https://crates.io/crates/curl)
+[![Documentation](https://docs.rs/curl/badge.svg)](https://docs.rs/curl)
+[![License](https://img.shields.io/github/license/sagebind/curl-rust.svg)](LICENSE)
+![Maintenance](https://img.shields.io/badge/maintenance-passively--maintained-brightgreen.svg)
+[![Build](https://github.com/lexmount/curl-rust/actions/workflows/websocket.yml/badge.svg?branch=moli)](https://github.com/lexmount/curl-rust/actions/workflows/websocket.yml)
+
+## WebSocket clients
+
+Enable the `websocket` feature for native frame I/O. `static-curl` builds the
+bundled libcurl with WebSocket support, avoiding dependence on the system
+library's protocol configuration. To use this fork throughout a workspace:
+
+```toml
+[dependencies]
+curl = { version = "0.4.51", features = ["static-curl", "websocket"] }
+
+[patch.crates-io]
+curl = { git = "https://github.com/lexmount/curl-rust", branch = "moli" }
+curl-sys = { git = "https://github.com/lexmount/curl-rust", branch = "moli" }
+```
+
+`Easy` and `Easy2` provide these methods:
+
+- `ws_connect_only(true)` sets `CURLOPT_CONNECT_ONLY` to **2**, completing the
+  HTTP upgrade before returning control. The existing `connect_only(true)`
+  retains its original meaning (mode 1, connection setup only).
+- `ws_options(&WsOptions)` configures raw callback mode or disables automatic
+  pong replies. Disabling automatic pong requires libcurl 8.14.0 or newer.
+- `ws_send(payload, frame_size, flags)` sends frame payload and returns the
+  number of bytes consumed. Normally `frame_size` is zero; `WsFlags::OFFSET`
+  allows supplying one frame across multiple calls.
+- `ws_recv(buffer)` returns `(bytes_received, WsFrame)`. The metadata is copied,
+  so it remains valid after subsequent calls and after the handle is dropped.
+- `active_socket()` exposes the borrowed socket for readiness polling.
+- `ws_meta()` copies metadata from inside a WebSocket write callback.
+
+`EasyHandle` and `Easy2Handle` also expose frame I/O, metadata, and the active
+socket. When using `Multi`, **keep the easy handle attached after the handshake
+completes**. Removing it invalidates subsequent connection I/O. Retry
+`Error::is_again()` after waiting for socket readiness, and resume short sends
+with only the remaining payload. An empty frame is valid and is not EOF.
+
+This is a low-level frame API: the application assembles fragmented messages,
+handles interleaved control frames and close semantics, validates text UTF-8,
+and applies its handshake/subprotocol/extension policy. Libcurl's successful
+handshake alone does not provide browser-level validation. See
+[libcurl's WebSocket interface](https://curl.se/libcurl/c/libcurl-ws.html).
+
+The base feature requires libcurl 7.86.0 or newer with WebSocket support.
+The separate `ws_start_frame_8_16_0` feature includes `websocket` and adds
+`ws_start_frame(flags, frame_len)` for starting typed or empty frames from an
+upload read callback; it requires libcurl 8.16.0 or newer. These features are
+opt-in so ordinary HTTP consumers can continue using older system libraries.
+
+With `static-curl,websocket`, this fork also retains connections after accepted
+`HTTP/1.0 101` upgrades. Bundled libcurl otherwise closes them using its HTTP/1.0
+persistence default before the first frame. The build generates a patched
+`ws.c` in `OUT_DIR`; it leaves the vendored `curl-sys/curl/` tree untouched and
+checks the patch location when libcurl changes (the bundled curl source is
+vendored directly, not tracked as a git submodule). The WebSocket receive path also decodes
+after each bounded socket read, so a small `ws_recv()` does not drain an
+arbitrarily large stream into libcurl's internal receive queue before the caller
+can pause reading. System library builds do not get these fixes.
+
+Bundled builds also preserve application-owned `CONNECT_ONLY` sockets when
+the per-host connection limit is reached, matching the total-limit eviction
+policy. A quiet upgraded WebSocket still consumes a connection slot; a new
+transfer waits for capacity instead of evicting it. Bundled libcurl 8.23.0
+includes the [upstream fix](https://github.com/curl/curl/commit/9e6673fb7d55b40d18383f49f465f1bd1cfce1ee),
+so this fork compiles `conncache.c` directly without a generated patch.
+
+For bundled OpenSSL builds on Apple platforms, enable the upstream
+`apple-sectrust` feature to use the system trust store. Explicit `SSL_CERT_FILE`
+and `SSL_CERT_DIR` overrides remain supported; no certificate file is selected
+automatically when SecTrust is available.
+
+Local validation (including C structure and function ABI checks):
+
+```sh
+cargo test --workspace --features static-curl,http2,brotli,apple-sectrust,websocket,ws_start_frame_8_16_0
+cargo run -p systest --features curl-sys/static-curl,curl-sys/apple-sectrust,systest/websocket,systest/ws_start_frame_8_16_0
+```
+
+## Quick Start
+
+```rust
+use std::io::{stdout, Write};
+
+use curl::easy::Easy;
+
+// Print a web page onto stdout
+fn main() {
+    let mut easy = Easy::new();
+    easy.url("https://www.rust-lang.org/").unwrap();
+    easy.write_function(|data| {
+        stdout().write_all(data).unwrap();
+        Ok(data.len())
+    }).unwrap();
+    easy.perform().unwrap();
+
+    println!("{}", easy.response_code().unwrap());
+}
+```
+
+```rust
+use curl::easy::Easy;
+
+// Capture output into a local `Vec`.
+fn main() {
+    let mut dst = Vec::new();
+    let mut easy = Easy::new();
+    easy.url("https://www.rust-lang.org/").unwrap();
+
+    let mut transfer = easy.transfer();
+    transfer.write_function(|data| {
+        dst.extend_from_slice(data);
+        Ok(data.len())
+    }).unwrap();
+    transfer.perform().unwrap();
+}
+```
+
+## Post / Put requests
+
+The `put` and `post` methods on `Easy` can configure the method of the HTTP
+request, and then `read_function` can be used to specify how data is filled in.
+This interface works particularly well with types that implement `Read`.
+
+```rust,no_run
+use std::io::Read;
+use curl::easy::Easy;
+
+fn main() {
+    let mut data = "this is the body".as_bytes();
+
+    let mut easy = Easy::new();
+    easy.url("http://www.example.com/upload").unwrap();
+    easy.post(true).unwrap();
+    easy.post_field_size(data.len() as u64).unwrap();
+
+    let mut transfer = easy.transfer();
+    transfer.read_function(|buf| {
+        Ok(data.read(buf).unwrap_or(0))
+    }).unwrap();
+    transfer.perform().unwrap();
+}
+```
+
+## Custom headers
+
+Custom headers can be specified as part of the request:
+
+```rust,no_run
+use curl::easy::{Easy, List};
+
+fn main() {
+    let mut easy = Easy::new();
+    easy.url("http://www.example.com").unwrap();
+
+    let mut list = List::new();
+    list.append("Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==").unwrap();
+    easy.http_headers(list).unwrap();
+    easy.perform().unwrap();
+}
+```
+
+## Keep alive
+
+The handle can be re-used across multiple requests. Curl will attempt to
+keep the connections alive.
+
+```rust,no_run
+use curl::easy::Easy;
+
+fn main() {
+    let mut handle = Easy::new();
+
+    handle.url("http://www.example.com/foo").unwrap();
+    handle.perform().unwrap();
+
+    handle.url("http://www.example.com/bar").unwrap();
+    handle.perform().unwrap();
+}
+```
+
+## Multiple requests
+
+The libcurl library provides support for sending multiple requests
+simultaneously through the "multi" interface. This is currently bound in the
+`multi` module of this crate and provides the ability to execute multiple
+transfers simultaneously. For more information, see that module.
+
+## Building
+
+By default, this crate will attempt to dynamically link to the system-wide
+libcurl and the system-wide SSL library. Some of this behavior can be customized
+with various Cargo features:
+
+- `ssl`: Enable SSL/TLS support using the platform-default TLS backend. On Windows this is [Schannel], on macOS [Secure Transport], and [OpenSSL] (or equivalent) on all other platforms. Enabled by default.
+- `rustls` Enable SSL/TLS support via [Rustls], a well-received alternative TLS backend written in Rust. Rustls is always statically linked. Disabled by default.
+
+  Note that Rustls support is experimental within Curl itself and may have significant bugs, so we don't offer any sort of stability guarantee with this feature.
+
+- `brotli`: Enable Brotli content encoding support. With vendored libcurl this uses `brotlic-sys`; with a system libcurl, the detected library must already have Brotli enabled. Disabled by default.
+- `http2`: Enable HTTP/2 support via libnghttp2. Disabled by default.
+- `static-curl`: Use a bundled libcurl version and statically link to it. Disabled by default.
+- `apple-sectrust`: Use Apple SecTrust for certificate verification with bundled libcurl and OpenSSL on Apple platforms. Implies `ssl` and `static-curl`. Disabled by default.
+- `static-ssl`: Use a bundled OpenSSL version and statically link to it. Only applies on platforms that use OpenSSL. Disabled by default.
+- `spnego`: Enable SPNEGO support. Disabled by default.
+- `upkeep_7_62_0`: Enable curl_easy_upkeep() support, introduced in curl 7.62.0. Disabled by default.
+- `poll_7_68_0`: Enable curl_multi_poll()/curl_multi_wakeup() support, requires curl 7.68.0 or later. Disabled by default.
+- `ntlm`: Enable NTLM support in curl. Disabled by default.
+- `windows-static-ssl`: Enable Openssl support on Windows via the static build provided by vcpkg. Incompatible with `ssl` (use `--no-default-features`). Disabled by default.
+
+  Note that to install openssl on windows via vcpkg the following commands needs to be ran:
+
+  ```shell
+  git clone https://github.com/microsoft/vcpkg
+  cd vcpkg
+  ./bootstrap-vcpkg.bat -disableMetrics
+  ./vcpkg.exe integrate install
+  ./vcpkg.exe install openssl:x64-windows-static-md
+  ```
+
+## Version Support
+
+The bindings have been developed using curl version 7.24.0. They should
+work with any newer version of curl and possibly with older versions,
+but this has not been tested.
+
+## Troubleshooting
+
+### Curl built against the NSS SSL library
+
+If you encounter the following error message:
+
+```
+  [77] Problem with the SSL CA cert (path? access rights?)
+```
+
+That means most likely, that curl was linked against `libcurl-nss.so` due to
+installed libcurl NSS development files, and that the required library
+`libnsspem.so` is missing. See also the curl man page: "If curl is built
+against the NSS SSL library, the NSS PEM PKCS#11 module (`libnsspem.so`) needs to be available for this option to work properly."
+
+In order to avoid this failure you can either
+
+- install the missing library (e.g. Debian: `nss-plugin-pem`), or
+- remove the libcurl NSS development files (e.g. Debian: `libcurl4-nss-dev`) and
+  rebuild curl-rust.
+
+## License
+
+The `curl-rust` crate is licensed under the MIT license, see [`LICENSE`](LICENSE) for more
+details.
+
+[libcurl]: https://curl.haxx.se/libcurl/
+[OpenSSL]: https://www.openssl.org/
+[Rustls]: https://github.com/ctz/rustls
+[Schannel]: https://docs.microsoft.com/en-us/windows/win32/com/schannel
+[Secure Transport]: https://developer.apple.com/documentation/security/secure_transport

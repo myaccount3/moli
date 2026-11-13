@@ -7,12 +7,15 @@ use moli_core::{
     runtime::BrowserConfig,
 };
 use moli_fetch::{
-    FetchConfig, WebBotAuthProfile, WebBotAuthSigner, validate_http_host_resolve_entries,
+    FetchConfig, TlsProfileId, WebBotAuthProfile, WebBotAuthSigner,
+    validate_http_host_resolve_entries,
 };
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::cli::{Cli, Commands, CommonArgs, DumpFormat, StripOptions, WebBotAuthProfileChoice};
+use crate::cli::{
+    Cli, Commands, CommonArgs, DumpFormat, StripOptions, TlsProfileChoice, WebBotAuthProfileChoice,
+};
 use crate::network_trace::NetworkTraceConfigSummary;
 
 pub use moli_protocol_server::ServerConfig;
@@ -224,6 +227,12 @@ fn apply_common_args(config: &mut AppConfig, common: &CommonArgs) -> Result<()> 
             .as_ref()
             .and_then(|certificate| certificate.password().map(str::to_owned)),
     );
+    let tls_profile = match common.tls_profile {
+        TlsProfileChoice::None => TlsProfileId::None,
+        TlsProfileChoice::Chrome152 => TlsProfileId::Chrome152,
+    };
+    // Applied after --user-agent so an explicit UA override wins (D3).
+    config.browser.fetch_mut().set_tls_profile(tls_profile);
     configure_web_bot_auth(config.browser.fetch_mut(), common)?;
 
     for source in &common.document_start_script {

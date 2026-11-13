@@ -18,4 +18,4 @@ pub use proxy::{
     SelectedProxy, select_proxy_route, select_proxy_route_with_env,
 };
 pub use runtime::{CurlMultiRuntime, CurlMultiRuntimeConfig, CurlTransferId};
-pub use tls::CurlTlsConfig;
+pub use tls::{CurlTlsConfig, TlsProfileId};

@@ -1,0 +1,38 @@
+curl-impersonate (MIT) — TLS/HTTP2 fingerprint profile subset
+================================================================
+
+Source: https://github.com/lexiforest/curl-impersonate
+File: patches/curl.patch (targets curl 8.23.0)
+Upstream license: MIT, Copyright (c) 2026 curl_cffi developers
+
+Moli vendors a trimmed subset of that patch into the lexmount/curl-rust fork
+(curl-sys/curl). Only the fingerprint-related CURLOPT_* options, the chrome152
+profile table, the vtls/openssl.c BoringSSL-like configuration block and the
+lib/http2.c / lib/http.c HTTP/2 knobs are retained. See
+docs / spike reports (section2-triage.md, transform.py T0-T9) for the exact
+trimming and AWS-LC compatibility transformations. The full license text
+follows.
+
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2026 curl_cffi developers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

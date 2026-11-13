@@ -497,6 +497,13 @@ pub struct CommonArgs {
     #[arg(long, value_name = "PATH", requires = "client_cert")]
     pub client_key: Option<PathBuf>,
 
+    /// Opt into a browser TLS/HTTP2 fingerprint profile. By default moli uses
+    /// its normal libcurl/AWS-LC handshake. `chrome152` matches Chrome 152's
+    /// JA4 and Akamai HTTP/2 fingerprint; the browser identity (UA / Client
+    /// Hints) is switched coherently for that context.
+    #[arg(long, value_enum, default_value = "none")]
+    pub tls_profile: TlsProfileChoice,
+
     /// Refuse a `fetch` whose URL the origin's `/robots.txt` disallows for the
     /// configured user agent. An unreachable `robots.txt` (5xx or a transport
     /// failure) disallows the whole origin, per RFC 9309. Subresources and
@@ -699,6 +706,15 @@ pub enum WebBotAuthProfileChoice {
     Cloudflare,
     #[value(name = "ietf-01")]
     IetfDraft01,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+#[value(rename_all = "lower")]
+pub enum TlsProfileChoice {
+    #[default]
+    None,
+    #[value(name = "chrome152")]
+    Chrome152,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

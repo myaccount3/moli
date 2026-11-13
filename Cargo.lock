@@ -946,7 +946,6 @@ dependencies = [
 [[package]]
 name = "curl"
 version = "0.4.51"
-source = "git+https://github.com/lexmount/curl-rust?rev=0392e12475d8d1160d4cae07c172cac02797cc25#0392e12475d8d1160d4cae07c172cac02797cc25"
 dependencies = [
  "curl-sys",
  "libc",
@@ -960,7 +959,6 @@ dependencies = [
 [[package]]
 name = "curl-sys"
 version = "0.4.91+curl-8.23.0"
-source = "git+https://github.com/lexmount/curl-rust?rev=0392e12475d8d1160d4cae07c172cac02797cc25#0392e12475d8d1160d4cae07c172cac02797cc25"
 dependencies = [
  "brotlic-sys",
  "cc",
@@ -2600,7 +2598,7 @@ dependencies = [
 
 [[package]]
 name = "moli"
-version = "1.1.24"
+version = "1.1.24+tls.1"
 dependencies = [
  "anyhow",
  "axum",
