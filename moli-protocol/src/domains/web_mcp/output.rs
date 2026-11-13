@@ -80,26 +80,10 @@ pub(in crate::domains) fn append_observation(
         RendererWebMcpEvent::ToolResponded {
             invocation_id,
             result,
-        } => {
-            if let RendererWebMcpResult::Error {
-                exception: Some(exception),
-                ..
-            } = result
-            {
-                let event_owner = session_id
-                    .as_deref()
-                    .map(CommandOwnerScope::for_session)
-                    .unwrap_or_else(|| owner.clone());
-                conn.register_runtime_remote_object_ids_from_value_for_owner(
-                    &event_owner,
-                    exception,
-                );
-            }
-            (
-                "WebMCP.toolResponded",
-                response_json(*invocation_id, result),
-            )
-        }
+        } => (
+            "WebMCP.toolResponded",
+            response_json(*invocation_id, result),
+        ),
     };
     let mut message = json!({"method":method,"params":params});
     if let Some(session_id) = session_id {
