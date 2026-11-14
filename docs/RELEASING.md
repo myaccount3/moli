@@ -37,6 +37,16 @@ release-regression binaries both invoke Cargo with `--release`, so they consume
 the same production profile. Normal development and unit-test builds retain
 their separate profiles and parallel code generation.
 
+## TLS/HTTP2 fingerprint profile
+
+The opt-in `--tls-profile chrome152` profile is implemented by the vendored
+curl fork and requires libcurl to be built with the OpenSSL/AWS-LC TLS
+backend. The Linux and macOS releases satisfy this. The Windows release links
+curl against Schannel, which cannot express the profile's TLS knobs:
+`--tls-profile chrome152` fails there with an explicit error, while the
+default network stack keeps working (the HTTP/2 options still apply, but the
+TLS/JA4 fingerprint is Schannel's rather than Chrome 152's).
+
 ## Prepare the release
 
 1. Update `version` in `moli/Cargo.toml` and refresh `Cargo.lock`.

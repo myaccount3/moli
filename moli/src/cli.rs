@@ -501,6 +501,10 @@ pub struct CommonArgs {
     /// its normal libcurl/AWS-LC handshake. `chrome152` matches Chrome 152's
     /// JA4 and Akamai HTTP/2 fingerprint; the browser identity (UA / Client
     /// Hints) is switched coherently for that context.
+    ///
+    /// Requires a libcurl built with the OpenSSL/AWS-LC backend (Linux and
+    /// macOS releases). The Windows release links curl against Schannel and
+    /// does not support this profile.
     #[arg(long, value_enum, default_value = "none")]
     pub tls_profile: TlsProfileChoice,
 

@@ -3,6 +3,9 @@ use std::{ffi::CString, fmt, path::PathBuf};
 use anyhow::{Context, Result};
 use curl::easy::{Easy2, Handler};
 
+/// `CURLcode` 4 (`CURLE_NOT_BUILT_IN`); `curl-sys` does not re-export it.
+const CURLE_NOT_BUILT_IN: curl_sys::CURLcode = 4;
+
 /// Optional browser TLS/HTTP2 fingerprint profile.
 ///
 /// When set, libcurl's vendored curl-impersonate subset is asked to emit a
@@ -213,6 +216,16 @@ impl CurlTlsConfig {
         let result = unsafe {
             curl_sys::curl_easy_setopt(easy.raw(), curl_sys::CURLOPT_IMPERSONATE, target.as_ptr())
         };
+        if result == CURLE_NOT_BUILT_IN {
+            #[cfg(target_os = "windows")]
+            let backend_hint = "this Windows build links libcurl against Schannel";
+            #[cfg(not(target_os = "windows"))]
+            let backend_hint = "this libcurl build does not include the required backend";
+            anyhow::bail!(
+                "the chrome152 TLS/HTTP2 profile requires libcurl built with the \
+                 OpenSSL/AWS-LC backend; {backend_hint}"
+            );
+        }
         if result != curl_sys::CURLE_OK {
             return Err(curl::Error::new(result))
                 .context("failed to activate curl TLS/HTTP2 impersonation profile");

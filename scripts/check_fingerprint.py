@@ -12,6 +12,9 @@ unstable). UA coherence is checked for the profile case (Chrome/152.0.7977.85).
 
 Usage: MOLI_BIN=/path/to/moli python3 scripts/check_fingerprint.py
 Set MOLI_HTTPS_PROXY if the CI runner needs an egress proxy.
+
+Windows releases link libcurl against Schannel and cannot activate the
+chrome152 profile, so this check only applies to the Linux and macOS builds.
 """
 import html
 import json
