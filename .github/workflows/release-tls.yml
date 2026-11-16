@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: >-
           python3 scripts/release.py
-          --version "1.1.24+tls.1"
+          --version "1.1.24+tls.2"
           --expected-target "${{ matrix.target }}"
 
       - name: Upload artifact
@@ -106,7 +106,7 @@ jobs:
         shell: bash
         run: >-
           python3 scripts/release.py
-          --version "1.1.24+tls.1"
+          --version "1.1.24+tls.2"
           --expected-target "${{ matrix.target }}"
 
       - name: Upload artifact
@@ -152,7 +152,7 @@ jobs:
         shell: pwsh
         run: >-
           python scripts/release.py
-          --version "1.1.24+tls.1"
+          --version "1.1.24+tls.2"
           --expected-target "${{ matrix.target }}"
 
       - name: Upload artifact
