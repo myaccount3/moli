@@ -575,6 +575,13 @@ pub struct CommonArgs {
     #[arg(long)]
     pub http_timeout: Option<u32>,
 
+    /// Override the per-turn V8 execution watchdog timeout in milliseconds
+    /// (default 8000). Raise this on a slow device if a legitimate script turn
+    /// is terminated before it finishes, which can leave script-driven
+    /// animations stuck. Requires a positive value.
+    #[arg(long, value_name = "MILLISECONDS", value_parser = clap::value_parser!(u64).range(1..))]
+    pub v8_watchdog_timeout_ms: Option<u64>,
+
     #[arg(long)]
     pub http_max_response_size: Option<usize>,
 
@@ -875,6 +882,31 @@ fn normalize_dump_flag(args: &mut Vec<OsString>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_v8_watchdog_timeout_ms_with_explicit_serve_command() {
+        let args =
+            normalize_args_for_compat(["moli", "serve", "--v8-watchdog-timeout-ms", "30000"]);
+        let cli = Cli::parse_from(args);
+
+        match cli.command {
+            Commands::Serve(args) => {
+                assert_eq!(args.common.v8_watchdog_timeout_ms, Some(30_000))
+            }
+            other => panic!("expected serve command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn v8_watchdog_timeout_ms_defaults_to_none() {
+        let args = normalize_args_for_compat(["moli", "serve"]);
+        let cli = Cli::parse_from(args);
+
+        match cli.command {
+            Commands::Serve(args) => assert_eq!(args.common.v8_watchdog_timeout_ms, None),
+            other => panic!("expected serve command, got {other:?}"),
+        }
+    }
 
     #[test]
     fn help_uses_the_public_product_description() {

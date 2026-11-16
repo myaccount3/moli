@@ -132,6 +132,7 @@ fn parses_explicit_fetch_command_with_compatibility_flags() {
                 http2_max_concurrent_streams: Some(100),
                 http_connect_timeout: Some(1200),
                 http_timeout: Some(5000),
+                v8_watchdog_timeout_ms: None,
                 http_max_response_size: Some(4096),
                 http_cache_dir: None,
                 profile_dir: None,

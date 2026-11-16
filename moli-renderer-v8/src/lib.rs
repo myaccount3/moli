@@ -119,6 +119,7 @@ mod tokio_blocking_budget;
 pub(crate) mod types;
 mod util;
 mod v8_execution_watchdog;
+pub use v8_execution_watchdog::set_v8_execution_watchdog_timeout;
 mod v8_finalizer;
 pub(crate) mod v8_platform;
 mod v8_traced_webidl_callback;

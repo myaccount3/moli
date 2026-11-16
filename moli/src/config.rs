@@ -12,6 +12,7 @@ use moli_fetch::{
 };
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::cli::{
     Cli, Commands, CommonArgs, DumpFormat, LayoutModeChoice, StripOptions, TlsProfileChoice,
@@ -131,6 +132,10 @@ fn apply_common_args(config: &mut AppConfig, common: &CommonArgs) -> Result<()> 
             .browser
             .fetch_mut()
             .set_request_timeout_ms(u64::from(http_timeout));
+    }
+
+    if let Some(timeout_ms) = common.v8_watchdog_timeout_ms {
+        moli_core::set_v8_execution_watchdog_timeout(Duration::from_millis(timeout_ms));
     }
 
     config

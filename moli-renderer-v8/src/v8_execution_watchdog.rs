@@ -22,6 +22,25 @@ use parking_lot::{Condvar, Mutex};
 // tests select a short timeout explicitly with override_timeout_for_test.
 pub(crate) const SCRIPT_TURN_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(8);
 
+/// Optional process-wide timeout override installed at startup.
+///
+/// A global value is used because the watchdog service is process-wide: the
+/// owner thread terminates exact isolates, so a single budget applies to every
+/// registration. When unset, each call site's built-in constant is used.
+static PRODUCTION_WATCHDOG_TIMEOUT: OnceLock<Duration> = OnceLock::new();
+
+/// Override the V8 execution watchdog timeout for every guarded work kind.
+///
+/// Call once during startup before any page scripts run. Repeated calls are
+/// ignored so the value stays stable for the process lifetime. A zero timeout
+/// is rejected to avoid arming an immediately-expiring watchdog.
+pub fn set_v8_execution_watchdog_timeout(timeout: Duration) {
+    if timeout.is_zero() {
+        return;
+    }
+    let _ = PRODUCTION_WATCHDOG_TIMEOUT.set(timeout);
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum V8ExecutionWatchdogKind {
     ScriptTurn,
@@ -47,10 +66,27 @@ std::thread_local! {
             const { std::cell::Cell::new([None, None, None]) };
 }
 
-#[cfg(test)]
+fn resolve_watchdog_timeout(
+    test_override: Option<Duration>,
+    production: Option<Duration>,
+    fallback: Duration,
+) -> Duration {
+    test_override.or(production).unwrap_or(fallback)
+}
+
 fn v8_execution_watchdog_timeout(kind: V8ExecutionWatchdogKind, fallback: Duration) -> Duration {
-    V8_EXECUTION_WATCHDOG_TIMEOUT_OVERRIDES
-        .with(|overrides| overrides.get()[kind.override_index()].unwrap_or(fallback))
+    #[cfg(test)]
+    let test_override = V8_EXECUTION_WATCHDOG_TIMEOUT_OVERRIDES
+        .with(|overrides| overrides.get()[kind.override_index()]);
+    #[cfg(not(test))]
+    let _ = kind;
+    #[cfg(not(test))]
+    let test_override = None;
+    resolve_watchdog_timeout(
+        test_override,
+        PRODUCTION_WATCHDOG_TIMEOUT.get().copied(),
+        fallback,
+    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -239,7 +275,6 @@ impl V8ExecutionWatchdog {
         isolate: v8::IsolateHandle,
         timeout: Duration,
     ) -> Self {
-        #[cfg(test)]
         let timeout = v8_execution_watchdog_timeout(kind, timeout);
         let (key, registration) =
             V8ExecutionWatchdogService::global().register(kind, isolate, timeout);
@@ -312,6 +347,24 @@ static V8_EXECUTION_WATCHDOG_SERVICE_THREAD_STARTS: std::sync::atomic::AtomicUsi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timeout_resolution_prefers_test_override_then_production_then_fallback() {
+        let fallback = Duration::from_secs(8);
+        assert_eq!(resolve_watchdog_timeout(None, None, fallback), fallback);
+        assert_eq!(
+            resolve_watchdog_timeout(None, Some(Duration::from_secs(30)), fallback),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            resolve_watchdog_timeout(
+                Some(Duration::from_millis(500)),
+                Some(Duration::from_secs(30)),
+                fallback
+            ),
+            Duration::from_millis(500)
+        );
+    }
 
     #[test]
     fn timeout_override_is_kind_scoped_and_restored() {
