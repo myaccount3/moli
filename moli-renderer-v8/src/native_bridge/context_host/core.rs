@@ -351,6 +351,7 @@ impl PageScriptHost {
             scrollbars_hidden: false,
             document_layout_state: RefCell::new(super::layout_state::DocumentLayoutState::default()),
             layout_pass_active: Cell::new(false),
+            published_layout_inputs: RefCell::new(None),
             completed_layout_pass_count: Cell::new(0),
             completed_layout_pass_time: Cell::new(std::time::Duration::ZERO),
             last_layout_pass_metrics: Cell::new(None),

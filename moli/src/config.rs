@@ -198,11 +198,13 @@ fn apply_common_args(config: &mut AppConfig, common: &CommonArgs) -> Result<()> 
     config
         .browser
         .set_subframe_loading_enabled(!common.disable_subframes);
-    config.browser.set_layout_policy(if common.layout {
-        LayoutPolicy::OnDemand
-    } else {
-        LayoutPolicy::Mock
-    });
+    config
+        .browser
+        .set_layout_policy(match (common.layout, common.layout_live) {
+            (false, _) => LayoutPolicy::Mock,
+            (true, true) => LayoutPolicy::Live,
+            (true, false) => LayoutPolicy::OnDemand,
+        });
     config
         .browser
         .set_scrollbars_hidden(common.layout && !common.scrollbars);

@@ -57,10 +57,45 @@ pub(crate) struct LayoutSnapshotCacheObservability {
     pub(crate) cached: Option<(DomHandle, moli_layout::LayoutTreeRetentionMetrics)>,
 }
 
+/// The set of layout inputs that make a published tree stale when they change.
+/// Captured after a layout pass and compared before a Live-policy geometry read.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct LayoutInputSnapshot {
+    dom_version: u64,
+    style_generations: Vec<(DomHandle, u64, u64)>,
+    style_viewport_generation: u64,
+    visual_state_generation: u64,
+    visual_resource_generation: u64,
+}
+
 impl PageScriptHost {
+    /// Snapshot the current layout-input generations.
+    fn current_layout_inputs(&self) -> LayoutInputSnapshot {
+        LayoutInputSnapshot {
+            dom_version: self.dom_host().dom_version(),
+            style_generations: self
+                .style_engine
+                .visual_style_input_generations(self.active_layout_document_handles()),
+            style_viewport_generation: self.style_viewport_generation.get(),
+            visual_state_generation: self.visual_state_generation(),
+            visual_resource_generation: self.visual_resource_generation(),
+        }
+    }
+
+    /// Whether the published tree is stale for the Live layout policy.
+    fn published_layout_is_stale(&self) -> bool {
+        self.published_layout_inputs
+            .borrow()
+            .as_ref()
+            .is_none_or(|snapshot| *snapshot != self.current_layout_inputs())
+    }
+
     pub(crate) fn set_layout_policy(&mut self, policy: moli_page_types::LayoutPolicy) {
         if !policy.uses_real_layout() {
             self.document_layout_state.get_mut().clear_latest_layout();
+        }
+        if policy.reflows_on_geometry_read() {
+            self.published_layout_inputs.get_mut().take();
         }
         self.layout_policy = policy;
     }
@@ -274,10 +309,14 @@ impl PageScriptHost {
             .inferred_frame_style_viewport_cache_observability()
     }
 
-    /// Lazily publishes the first screen layout for this main Document.
+    /// Lazily publishes the screen layout for this main Document.
     ///
     /// Every consumer shares the same recursive tree. Missing nodes or newly
-    /// navigated frames in an existing tree must not refresh the whole page.
+    /// navigated frames in an existing tree do not refresh the whole page
+    /// under [`moli_page_types::LayoutPolicy::OnDemand`]. Under
+    /// [`moli_page_types::LayoutPolicy::Live`], a tree whose layout inputs
+    /// changed since publication is rebuilt synchronously so geometry reads
+    /// observe the current document (browser "forced layout" semantics).
     pub(crate) fn ensure_initial_layout(&self) -> Result<(), LayoutError> {
         if !self.layout_policy.uses_real_layout() {
             return Ok(());
@@ -286,12 +325,13 @@ impl PageScriptHost {
             return Err(LayoutError::ReentrantLayoutPass);
         }
         let document = self.document_handle();
-        if self
+        let needs_refresh = self
             .document_layout_state
             .borrow()
             .latest_layout(document)
-            .is_some()
-        {
+            .is_none()
+            || (self.layout_policy.reflows_on_geometry_read() && self.published_layout_is_stale());
+        if !needs_refresh {
             return Ok(());
         }
         let request = LayoutPassRequest::new(
@@ -452,12 +492,14 @@ impl PageScriptHost {
             })
             .collect::<Vec<_>>();
         let tree = pass.into_tree();
+        let inputs = self.current_layout_inputs();
         let frame_viewports_changed = {
             let mut state = self.document_layout_state.borrow_mut();
             state.retain_live_frame_viewports(|frame| self.child_browsing_context_is_live(frame));
             state.publish_latest_layout(document, tree);
             state.update_frame_viewports(frame_viewports)
         };
+        *self.published_layout_inputs.borrow_mut() = Some(inputs);
         if frame_viewports_changed {
             self.style_viewport_generation
                 .set(self.style_viewport_generation.get().saturating_add(1));

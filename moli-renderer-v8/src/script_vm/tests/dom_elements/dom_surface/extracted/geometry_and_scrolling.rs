@@ -487,6 +487,44 @@ fn cold_geometry_entries_share_one_layout_and_do_not_rebuild_for_missing_boxes()
     }
 }
 #[test]
+fn live_policy_reflows_geometry_after_dom_mutation_without_explicit_publish() {
+    let mut vm = new_parsed_test_vm(
+        "https://live-geometry.test/",
+        "<!doctype html><div id=target style='position:absolute;left:20px;top:20px;width:100px;height:80px'></div>",
+    );
+    vm.set_layout_policy(moli_page_types::LayoutPolicy::Live);
+
+    let before = vm.layout_pass_observability_for_test().1;
+    assert_eq!(vm.eval("target.clientWidth").unwrap(), "100");
+    assert_eq!(vm.layout_pass_observability_for_test().1, before + 1);
+
+    // A second clean read must reuse the published tree.
+    assert_eq!(vm.eval("target.clientWidth").unwrap(), "100");
+    assert_eq!(vm.layout_pass_observability_for_test().1, before + 1);
+
+    // Mutate geometry. The next CSSOM read must synchronously reflow and see it.
+    vm.eval("target.style.width='200px'").unwrap();
+    assert_eq!(vm.eval("target.clientWidth").unwrap(), "200");
+    assert_eq!(vm.layout_pass_observability_for_test().1, before + 2);
+
+    // getLayoutMetrics' document metrics are served from the same choke point.
+    let before_metrics = vm.layout_pass_observability_for_test().1;
+    vm.eval("document.body.style.height='1600px'").unwrap();
+    let height: f64 = vm
+        .eval("document.documentElement.scrollHeight")
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(
+        height >= 1600.0,
+        "expected grown document height, got {height}"
+    );
+    assert_eq!(
+        vm.layout_pass_observability_for_test().1,
+        before_metrics + 1
+    );
+}
+#[test]
 fn document_client_size_initializes_layout_once_and_reuses_it_until_capture() {
     let mut vm = new_parsed_test_vm(
         "https://document-client-viewport.test/",

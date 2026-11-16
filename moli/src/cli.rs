@@ -631,6 +631,20 @@ pub struct CommonArgs {
     )]
     pub layout: bool,
 
+    /// Refresh layout synchronously on geometry reads when the DOM or styles
+    /// changed. Requires --layout. With this flag, `scrollHeight`,
+    /// `getBoundingClientRect` and `Page.getLayoutMetrics` observe async DOM
+    /// growth immediately, matching browser forced-layout semantics (used by
+    /// Playwright `full_page=True`). Without it, geometry reads reuse the last
+    /// published layout snapshot and stay deterministic.
+    #[arg(
+        long = "layout-live",
+        env = "MOLI_LAYOUT_LIVE",
+        requires = "layout",
+        value_parser = clap::builder::BoolishValueParser::new()
+    )]
+    pub layout_live: bool,
+
     /// Show native scrollbars. Requires --layout.
     #[arg(
         long,

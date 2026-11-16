@@ -840,6 +840,10 @@ pub(crate) struct PageScriptHost {
     scrollbars_hidden: bool,
     document_layout_state: RefCell<layout_state::DocumentLayoutState>,
     layout_pass_active: Cell<bool>,
+    /// Snapshot of the layout inputs at the time the current published tree
+    /// was produced. Used by the Live layout policy to detect a stale tree and
+    /// reflow synchronously on the next geometry read.
+    published_layout_inputs: RefCell<Option<layout::LayoutInputSnapshot>>,
     completed_layout_pass_count: Cell<u64>,
     completed_layout_pass_time: Cell<std::time::Duration>,
     last_layout_pass_metrics: Cell<Option<moli_layout::LayoutPassMetrics>>,

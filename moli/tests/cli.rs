@@ -1822,6 +1822,49 @@ fn layout_selects_on_demand_policy_for_fetch_and_serve() {
 }
 
 #[test]
+fn layout_live_selects_live_policy_for_fetch_and_serve() {
+    for mut args in [
+        vec![
+            "moli",
+            "fetch",
+            "--layout",
+            "--layout-live",
+            "https://example.com",
+        ],
+        vec!["moli", "serve", "--layout", "--layout-live"],
+    ] {
+        let cli =
+            Cli::try_parse_from(normalize_args_for_compat(std::mem::take(&mut args))).unwrap();
+        let config = AppConfig::from_cli(&cli).unwrap();
+        assert_eq!(
+            config.browser.layout_policy(),
+            moli_core::LayoutPolicy::Live
+        );
+    }
+}
+
+#[test]
+fn layout_live_requires_layout() {
+    let result = Cli::try_parse_from(normalize_args_for_compat(vec![
+        "moli",
+        "serve",
+        "--layout-live",
+    ]));
+    assert!(result.is_err(), "--layout-live without --layout must fail");
+}
+
+#[test]
+fn layout_without_live_keeps_on_demand_policy() {
+    let cli =
+        Cli::try_parse_from(normalize_args_for_compat(vec!["moli", "serve", "--layout"])).unwrap();
+    let config = AppConfig::from_cli(&cli).unwrap();
+    assert_eq!(
+        config.browser.layout_policy(),
+        moli_core::LayoutPolicy::OnDemand
+    );
+}
+
+#[test]
 fn scrollbars_are_opt_in_for_layout_fetch_and_serve() {
     for command in ["fetch", "serve"] {
         for visible in [false, true] {

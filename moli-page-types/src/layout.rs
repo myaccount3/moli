@@ -10,11 +10,23 @@ pub enum LayoutPolicy {
     /// Screenshots and screencasts publish layout; print projections are temporary.
     /// Geometry queries and input read the last published layout, if any.
     OnDemand,
+    /// Like [`Self::OnDemand`], but geometry queries rebuild the published
+    /// layout when DOM or style inputs changed since the last layout pass.
+    /// This matches browser "forced synchronous layout" semantics so that
+    /// clients which measure the document before capturing (for example
+    /// Playwright `full_page=True`) observe the current document height.
+    /// Screenshots, screencasts and PDF output still publish layout normally.
+    Live,
 }
 
 impl LayoutPolicy {
     pub const fn uses_real_layout(self) -> bool {
-        matches!(self, Self::OnDemand)
+        matches!(self, Self::OnDemand | Self::Live)
+    }
+
+    /// Whether geometry reads must refresh a stale published layout.
+    pub const fn reflows_on_geometry_read(self) -> bool {
+        matches!(self, Self::Live)
     }
 }
 
@@ -40,6 +52,10 @@ mod tests {
         assert_eq!(LayoutPolicy::default(), LayoutPolicy::Mock);
         assert!(!LayoutPolicy::default().uses_real_layout());
         assert!(LayoutPolicy::OnDemand.uses_real_layout());
+        assert!(LayoutPolicy::Live.uses_real_layout());
         assert!(!LayoutPolicy::Mock.uses_real_layout());
+        assert!(!LayoutPolicy::OnDemand.reflows_on_geometry_read());
+        assert!(LayoutPolicy::Live.reflows_on_geometry_read());
+        assert!(!LayoutPolicy::Mock.reflows_on_geometry_read());
     }
 }
