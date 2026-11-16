@@ -492,18 +492,20 @@ impl PageScriptHost {
             })
             .collect::<Vec<_>>();
         let tree = pass.into_tree();
-        let inputs = self.current_layout_inputs();
         let frame_viewports_changed = {
             let mut state = self.document_layout_state.borrow_mut();
             state.retain_live_frame_viewports(|frame| self.child_browsing_context_is_live(frame));
             state.publish_latest_layout(document, tree);
             state.update_frame_viewports(frame_viewports)
         };
-        *self.published_layout_inputs.borrow_mut() = Some(inputs);
         if frame_viewports_changed {
             self.style_viewport_generation
                 .set(self.style_viewport_generation.get().saturating_add(1));
         }
+        // Snapshot inputs after all publish-time generation bumps so a clean
+        // subsequent read is not mistaken for a stale one.
+        let inputs = self.current_layout_inputs();
+        *self.published_layout_inputs.borrow_mut() = Some(inputs);
         self.last_layout_pass_metrics.set(Some(metrics));
         self.layout_snapshot_cache_publishes
             .set(self.layout_snapshot_cache_publishes.get().saturating_add(1));
