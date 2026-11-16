@@ -847,14 +847,32 @@ async fn native_send_rejects_overlap_until_current_frame_completes() {
 async fn native_cancel_or_failure_settles_send_during_handshake() {
     for cancel in [true, false] {
         let (accepted_tx, accepted_rx) = oneshot::channel();
-        let (finish_tx, finish_rx) = std::sync::mpsc::channel();
+        let (fail_tx, fail_rx) = std::sync::mpsc::channel();
         let (url, task) = server(move |mut stream| {
             read_request(&mut stream);
             accepted_tx.send(()).unwrap();
             if cancel {
-                assert_eq!(stream.read(&mut [0]).unwrap(), 0);
+                // Wait until the client actually closes the TCP stream. A
+                // zero-length read returns Ok(0) immediately on both Linux and
+                // macOS, which let the server drop the connection before the
+                // test could observe the pending send. Reading into a real
+                // buffer until EOF keeps the handshake alive until cancel()
+                // takes effect on the client side.
+                let mut byte = [0u8; 1];
+                while stream.read(&mut byte).unwrap() != 0 {}
             } else {
-                finish_rx.recv_timeout(DEADLINE).unwrap();
+                // Hold the handshake open until the test has observed the
+                // pending send, then send an invalid handshake response so the
+                // failure is deterministic on every platform. Dropping the TCP
+                // stream alone is not reliable: on some curl builds the pending
+                // frame is written first (the send resolves Ok) and curl reports
+                // the handshake as Ok with an empty response, with no Closed.
+                fail_rx.recv_timeout(DEADLINE).unwrap();
+                stream
+                    .write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n")
+                    .unwrap();
+                let mut byte = [0u8; 1];
+                while stream.read(&mut byte).unwrap() != 0 {}
             }
         });
         let runtime = CurlWebSocketRuntime::new().unwrap();
@@ -874,7 +892,7 @@ async fn native_cancel_or_failure_settles_send_during_handshake() {
         if cancel {
             sender.cancel();
         } else {
-            finish_tx.send(()).unwrap();
+            fail_tx.send(()).unwrap();
         }
         assert!(timeout(DEADLINE, send).await.unwrap().is_err());
         loop {

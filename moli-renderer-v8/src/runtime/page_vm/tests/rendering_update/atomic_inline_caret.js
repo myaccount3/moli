@@ -24,7 +24,12 @@ window.setAtomicRange = (text, start, end, styles = '', overlap = '') => {
   if (overlap === 'later') {
     const cover = document.createElement('span');
     cover.contentEditable = 'false';
-    cover.style.cssText = 'display:inline-block;vertical-align:top;width:40px;height:32px;margin-top:-32px;background:red';
+    // Overlay the glyphless break highlight entirely. The selection rect
+    // spans roughly y=0..34 (line height plus the break's extra extent), so
+    // the cover must reach above y=0 as well as below y=34. A taller box
+    // pulled further up avoids leaving a thin strip of highlight visible at
+    // the top, which made this compositing assertion depend on font metrics.
+    cover.style.cssText = 'display:inline-block;vertical-align:top;width:40px;height:48px;margin-top:-40px;background:red';
     editor.append(cover);
   }
 };

@@ -217,7 +217,13 @@ fn bucket_creation_is_queued_before_identity_publication_and_leaves_sql_availabl
 #[test]
 fn long_sql_paths_survive_restart_and_expired_bucket_cleanup() {
     let mut fixture = Fixture::new();
-    let component = "nested-profile-".repeat(5);
+    // Keep the fixture path above the classic 260-byte MAX_PATH so this test
+    // still exercises long-path handling, but leave enough headroom below
+    // SQLite's 512-byte pathname limit for the db.sqlite suffix that the
+    // catalog appends (idb-lite/live/<owner>/<name>/<gen>). On macOS the temp
+    // prefix (/var/folders/...) is ~48 bytes, so three 75-byte components put
+    // the final DB path right at 512 bytes and fail to open.
+    let component = "nested-profile-".repeat(4);
     let root = fixture
         .root
         .join(&component)
