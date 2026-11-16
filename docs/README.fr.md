@@ -225,8 +225,9 @@ Dans Moli, les opérations coûteuses du navigateur ne sont jamais activées par
 
 | Mode ou option | Comportement |
 | --- | --- |
-| Par défaut | `LayoutPolicy::Mock` — géométrie déterministe au format compatible, sans véritable mise en page ni rendu |
-| `--layout` | `LayoutPolicy::OnDemand` — véritables mise en page, géométrie, hit-testing, entrées par coordonnées, captures d'écran et screencast |
+| Par défaut / `--layout=mock` | `LayoutPolicy::Mock` — géométrie déterministe au format compatible, sans véritable mise en page ni rendu |
+| `--layout` / `--layout=on-demand` | `LayoutPolicy::OnDemand` — véritables mise en page, géométrie, hit-testing, entrées par coordonnées, captures d'écran et screencast ; les lectures de géométrie réutilisent le dernier instantané publié |
+| `--layout=live` | `LayoutPolicy::Live` — comme on-demand, mais les lectures de géométrie déclenchent un reflow synchrone après les changements DOM/style, afin que `scrollHeight`/`getLayoutMetrics` restent à jour (sémantique de layout forcé du navigateur) |
 | `--resource` | Récupère l'ensemble des familles de ressources optionnelles (visuelles et multimédias) |
 | `--image`, `--font`, `--audio`, `--video`, `--media`, `--text-track` | Active une famille spécifique de ressources optionnelles |
 | `--profile-dir`, `--http-cache-dir`, `--cookie` | Active, au cas par cas, la persistance dont la charge de travail a besoin |

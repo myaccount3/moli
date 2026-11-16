@@ -267,8 +267,9 @@ Moli에서 비용이 큰 브라우저 작업은 명시적으로 활성화해야 
 
 | 모드 또는 옵션 | 동작 |
 | --- | --- |
-| 기본값 | `LayoutPolicy::Mock` — 실제 레이아웃이나 페인트 없이 호환 가능한 형식의 결정론적 기하 정보를 반환 |
-| `--layout` | `LayoutPolicy::OnDemand` — 실제 레이아웃, 기하 정보, 히트 테스트, 좌표 입력, 스크린샷, 스크린캐스트 |
+| 기본값 / `--layout=mock` | `LayoutPolicy::Mock` — 실제 레이아웃이나 페인트 없이 호환 가능한 형식의 결정론적 기하 정보를 반환 |
+| `--layout` / `--layout=on-demand` | `LayoutPolicy::OnDemand` — 실제 레이아웃, 기하 정보, 히트 테스트, 좌표 입력, 스크린샷, 스크린캐스트; 기하 읽기는 마지막 게시된 스냅샷을 재사용 |
+| `--layout=live` | `LayoutPolicy::Live` — on-demand와 같지만 DOM/스타일 변경 시 기하 읽기가 동기적으로 재배치되어 `scrollHeight`/`getLayoutMetrics`가 최신 상태를 유지(브라우저 강제 레이아웃 의미) |
 | `--resource` | 선택적인 모든 시각·미디어 리소스 패밀리 가져오기 |
 | `--image`, `--font`, `--audio`, `--video`, `--media`, `--text-track` | 특정 선택적 리소스 패밀리 하나 활성화 |
 | `--profile-dir`, `--http-cache-dir`, `--cookie` | 워크로드에 필요한 영속성을 선택적으로 활성화 |

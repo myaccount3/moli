@@ -225,8 +225,9 @@ En Moli, las operaciones caras del navegador hay que activarlas explícitamente:
 
 | Modo u opción | Comportamiento |
 | --- | --- |
-| Por defecto | `LayoutPolicy::Mock`: devuelve geometría determinista, compatible con el formato esperado, sin layout ni pintado reales |
-| `--layout` | `LayoutPolicy::OnDemand`: layout real, geometría, hit-testing, inputs por coordenadas, capturas de pantalla y screencast |
+| Por defecto / `--layout=mock` | `LayoutPolicy::Mock`: devuelve geometría determinista, compatible con el formato esperado, sin layout ni pintado reales |
+| `--layout` / `--layout=on-demand` | `LayoutPolicy::OnDemand`: layout real, geometría, hit-testing, inputs por coordenadas, capturas de pantalla y screencast; las lecturas de geometría reutilizan la última instantánea publicada |
+| `--layout=live` | `LayoutPolicy::Live`: como on-demand, pero las lecturas de geometría fuerzan un reflujo síncrono tras cambios del DOM/estilos, para que `scrollHeight`/`getLayoutMetrics` estén al día (semántica de layout forzado del navegador) |
 | `--resource` | Descarga todas las familias opcionales de recursos visuales y multimedia |
 | `--image`, `--font`, `--audio`, `--video`, `--media`, `--text-track` | Activa por separado una familia concreta de recursos opcionales |
 | `--profile-dir`, `--http-cache-dir`, `--cookie` | Activa de forma selectiva la persistencia que necesite tu carga de trabajo |

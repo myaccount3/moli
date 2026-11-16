@@ -223,8 +223,9 @@ Moli 是 Lexmount 旗下的开源无头浏览器；Lexmount Browser 则是围绕
 
 | 模式/选项 | 行为 |
 | --- | --- |
-| 默认 | `LayoutPolicy::Mock`——返回确定性的、格式兼容的几何信息，不执行真实的布局或绘制 |
-| `--layout` | `LayoutPolicy::OnDemand`——提供真实的布局、几何信息、命中测试、坐标输入、截图和屏幕串流 |
+| 默认 / `--layout=mock` | `LayoutPolicy::Mock`——返回确定性的、格式兼容的几何信息，不执行真实的布局或绘制 |
+| `--layout` / `--layout=on-demand` | `LayoutPolicy::OnDemand`——提供真实的布局、几何信息、命中测试、坐标输入、截图和屏幕串流；几何读取复用上次发布的快照 |
+| `--layout=live` | `LayoutPolicy::Live`——与 on-demand 类似，但几何读取会在 DOM/样式变化后同步重排，使 `scrollHeight`/`getLayoutMetrics` 保持最新（浏览器强制布局语义） |
 | `--resource` | 拉取所有可选的视觉/媒体资源类别 |
 | `--image`、`--font`、`--audio`、`--video`、`--media`、`--text-track` | 单独启用某一类可选资源 |
 | `--profile-dir`、`--http-cache-dir`、`--cookie` | 按工作负载需要，选择性开启持久化能力 |

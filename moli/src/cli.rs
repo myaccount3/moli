@@ -616,41 +616,39 @@ pub struct CommonArgs {
     #[arg(long)]
     pub disable_subframes: bool,
 
-    /// Enable the real on-demand layout renderer and screenshot surfaces.
-    /// Native scrollbars are hidden unless --scrollbars or MOLI_SCROLLBARS is enabled.
-    /// With `fetch --eval` or `--eval-file`, refresh layout once before running
-    /// the script so geometry APIs can read it. Script mutations do not refresh it.
+    /// Select the layout mode, which controls whether real layout geometry is
+    /// built and how geometry reads behave:
+    /// - omitted: deterministic compatibility geometry, no layout/paint.
+    /// - `--layout` / `--layout=on-demand`: build layout on demand for
+    ///   screenshots, screencast and PDF; geometry reads reuse the last
+    ///   published layout snapshot.
+    /// - `--layout=live`: like on-demand, but geometry reads reflow
+    ///   synchronously when the DOM or styles changed, matching browser
+    ///   forced-layout semantics (needed by e.g. Playwright `full_page=True`).
+    /// - `--layout=mock`: explicitly select the no-layout compatibility mode.
     ///
-    /// Without this flag Moli keeps deterministic compatibility
-    /// geometry and does not construct layout or paint output.
+    /// Native scrollbars are hidden unless --scrollbars or MOLI_SCROLLBARS is
+    /// enabled. With `fetch --eval`, layout is refreshed once before the script
+    /// so geometry APIs can read it. The short form `-l` may likewise take a
+    /// value with `=`, e.g. `-l=live`, and still groups with other bool flags
+    /// (`-lr`). For compatibility, MOLI_LAYOUT also accepts `true`/`1` and
+    /// `false`/`0` besides the mode names.
     #[arg(
         short,
         long,
+        value_enum,
         env = "MOLI_LAYOUT",
-        value_parser = clap::builder::BoolishValueParser::new()
+        num_args(0..=1),
+        require_equals = true,
+        default_missing_value = "on-demand"
     )]
-    pub layout: bool,
+    pub layout: Option<LayoutModeChoice>,
 
-    /// Refresh layout synchronously on geometry reads when the DOM or styles
-    /// changed. Requires --layout. With this flag, `scrollHeight`,
-    /// `getBoundingClientRect` and `Page.getLayoutMetrics` observe async DOM
-    /// growth immediately, matching browser forced-layout semantics (used by
-    /// Playwright `full_page=True`). Without it, geometry reads reuse the last
-    /// published layout snapshot and stay deterministic.
-    #[arg(
-        long = "layout-live",
-        env = "MOLI_LAYOUT_LIVE",
-        requires = "layout",
-        value_parser = clap::builder::BoolishValueParser::new()
-    )]
-    pub layout_live: bool,
-
-    /// Show native scrollbars. Requires --layout.
+    /// Show native scrollbars. Requires --layout with a real-layout mode.
     #[arg(
         long,
         env = "MOLI_SCROLLBARS",
-        value_parser = clap::builder::BoolishValueParser::new(),
-        requires_if("true", "layout")
+        value_parser = clap::builder::BoolishValueParser::new()
     )]
     pub scrollbars: bool,
 
@@ -733,6 +731,29 @@ pub enum TlsProfileChoice {
     None,
     #[value(name = "chrome152")]
     Chrome152,
+}
+
+/// Value of `--layout`. `OnDemand` keeps the deterministic frozen geometry;
+/// `Live` reflows synchronously on geometry reads; `Mock` explicitly selects
+/// the no-layout compatibility mode (equivalent to omitting the flag).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "lower")]
+pub enum LayoutModeChoice {
+    #[value(name = "on-demand", alias = "true", alias = "1")]
+    OnDemand,
+    Live,
+    #[value(alias = "false", alias = "0")]
+    Mock,
+}
+
+impl LayoutModeChoice {
+    pub fn layout_policy(self) -> moli_core::LayoutPolicy {
+        match self {
+            Self::Mock => moli_core::LayoutPolicy::Mock,
+            Self::OnDemand => moli_core::LayoutPolicy::OnDemand,
+            Self::Live => moli_core::LayoutPolicy::Live,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1169,7 +1190,7 @@ mod tests {
 
         match grouped.command {
             Commands::Serve(args) => {
-                assert!(args.common.layout);
+                assert_eq!(args.common.layout, Some(super::LayoutModeChoice::OnDemand));
                 assert!(args.common.resource);
             }
             other => panic!("expected serve command, got {other:?}"),

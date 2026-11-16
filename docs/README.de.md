@@ -224,8 +224,9 @@ Rechenintensive Browser-Operationen sind in Moli standardmäßig deaktiviert und
 
 | Modus oder Option | Verhalten |
 | --- | --- |
-| Standard | `LayoutPolicy::Mock` — deterministische, formatkompatible Geometrie, kein echtes Layout und kein Zeichnen |
-| `--layout` | `LayoutPolicy::OnDemand` — echtes Layout, Geometrie, Hit-Testing, Koordinateneingaben, Screenshots und Screencast |
+| Standard / `--layout=mock` | `LayoutPolicy::Mock` — deterministische, formatkompatible Geometrie, kein echtes Layout und kein Zeichnen |
+| `--layout` / `--layout=on-demand` | `LayoutPolicy::OnDemand` — echtes Layout, Geometrie, Hit-Testing, Koordinateneingaben, Screenshots und Screencast; Geometrie-Lesevorgänge nutzen den zuletzt veröffentlichten Snapshot |
+| `--layout=live` | `LayoutPolicy::Live` — wie on-demand, aber Geometrie-Lesevorgänge erzwingen nach DOM-/Style-Änderungen ein synchrones Reflow, damit `scrollHeight`/`getLayoutMetrics` aktuell bleiben (Semantik des Browser-Forced-Layout) |
 | `--resource` | Alle optionalen visuellen und Medienressourcengruppen laden |
 | `--image`, `--font`, `--audio`, `--video`, `--media`, `--text-track` | Eine bestimmte optionale Ressourcengruppe einzeln aktivieren |
 | `--profile-dir`, `--http-cache-dir`, `--cookie` | Persistenz gezielt aktivieren, je nach Bedarf des Workloads |

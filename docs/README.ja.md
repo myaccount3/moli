@@ -223,8 +223,9 @@ Moli では、処理負荷の高い機能は明示的に有効にした場合だ
 
 | 動作方式または引数 | 動作 |
 | --- | --- |
-| 標準 | `LayoutPolicy::Mock` — 再現可能な位置・寸法情報を互換形式で返します。実際のレイアウト計算や描画は行いません。 |
-| `--layout` | `LayoutPolicy::OnDemand` — 実際のレイアウト、位置・寸法、座標判定、座標入力、画面画像、連続画面配信を提供します。 |
+| 標準 / `--layout=mock` | `LayoutPolicy::Mock` — 再現可能な位置・寸法情報を互換形式で返します。実際のレイアウト計算や描画は行いません。 |
+| `--layout` / `--layout=on-demand` | `LayoutPolicy::OnDemand` — 実際のレイアウト、位置・寸法、座標判定、座標入力、画面画像、連続画面配信を提供します。位置・寸法の読み取りは最後に公開されたスナップショットを再利用します。 |
+| `--layout=live` | `LayoutPolicy::Live` — on-demand と同じですが、DOM/スタイル変更後に位置・寸法の読み取りが同期的に再レイアウトされ、`scrollHeight`/`getLayoutMetrics` が最新になります（ブラウザの強制レイアウト相当）。 |
 | `--resource` | 通常は省略する画像・音声などのデータをすべて取得します。 |
 | `--image`、`--font`、`--audio`、`--video`、`--media`、`--text-track` | 指定した種類のデータを取得します。 |
 | `--profile-dir`、`--http-cache-dir`、`--cookie` | 必要な保存機能だけを選んで有効にします。 |

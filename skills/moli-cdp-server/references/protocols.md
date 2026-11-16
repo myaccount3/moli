@@ -7,6 +7,7 @@
 ```bash
 moli serve
 moli serve --layout
+moli serve --layout=live
 moli serve --layout --resource
 moli serve --host 127.0.0.1 --port 9333 --layout
 ```
@@ -79,6 +80,8 @@ setting `captureBeyondViewport`:
    bundled browser.
 4. Remove Chrome-only launch flags and `executablePath` settings.
 5. Enable `--layout` when a failure involves real geometry or visual output.
+   Use `--layout=live` if the client measures the page before capturing (for
+   example Playwright `full_page=True`) and async content grows the page.
 6. Enable only the resource families the page requires.
 7. Check the installed Moli version's `serve --help`.
 8. Treat an explicit unsupported protocol error as a capability boundary; do

@@ -275,8 +275,9 @@ enabled by default:
 
 | Mode or option | Behavior |
 | --- | --- |
-| Default | `LayoutPolicy::Mock` — deterministic geometry in a compatible format, with no real layout or paint |
-| `--layout` | `LayoutPolicy::OnDemand` — real layout, geometry, hit-testing, coordinate input, screenshots, screencast |
+| Default / `--layout=mock` | `LayoutPolicy::Mock` — deterministic geometry in a compatible format, with no real layout or paint |
+| `--layout` / `--layout=on-demand` | `LayoutPolicy::OnDemand` — real layout, geometry, hit-testing, coordinate input, screenshots, screencast; geometry reads reuse the last published snapshot |
+| `--layout=live` | `LayoutPolicy::Live` — like on-demand, but geometry reads reflow synchronously after DOM/style changes, so `scrollHeight`/`getLayoutMetrics` stay current (browser forced-layout semantics) |
 | `--resource` | Fetch all optional visual/media resource families |
 | `--image`, `--font`, `--audio`, `--video`, `--media`, `--text-track` | Enable one specific optional resource family |
 | `--profile-dir`, `--http-cache-dir`, `--cookie` | Selectively enable the persistence required by the workload |
@@ -289,6 +290,12 @@ geometry reads may reuse it even if the page has changed. Screenshots always
 rebuild and replace the frozen tree. Each screencast subscription remembers
 only an opaque visual-state token: an unchanged token suppresses the poll,
 while a changed token triggers one fresh frame. Paint results are never reused.
+`--layout=live` opts into live geometry: a geometry read detects changed DOM/style
+inputs and rebuilds the snapshot synchronously, which is what automation clients
+that measure before capturing (for example Playwright `full_page=True`) need.
+`-l` is the short form of `--layout` and may also take a value (`-l=live`); bare
+`-l` still groups with other short flags (`-lr`). For compatibility,
+`MOLI_LAYOUT` also accepts `true`/`1` (on-demand) and `false`/`0` (mock).
 
 ## Architecture
 

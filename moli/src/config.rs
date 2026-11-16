@@ -14,7 +14,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::cli::{
-    Cli, Commands, CommonArgs, DumpFormat, StripOptions, TlsProfileChoice, WebBotAuthProfileChoice,
+    Cli, Commands, CommonArgs, DumpFormat, LayoutModeChoice, StripOptions, TlsProfileChoice,
+    WebBotAuthProfileChoice,
 };
 use crate::network_trace::NetworkTraceConfigSummary;
 
@@ -101,7 +102,11 @@ impl AppConfig {
 }
 
 fn apply_common_args(config: &mut AppConfig, common: &CommonArgs) -> Result<()> {
-    if common.scrollbars && !common.layout {
+    let layout_policy = common
+        .layout
+        .map(LayoutModeChoice::layout_policy)
+        .unwrap_or(LayoutPolicy::Mock);
+    if common.scrollbars && !layout_policy.uses_real_layout() {
         bail!("--scrollbars requires --layout or MOLI_LAYOUT=true");
     }
 
@@ -198,16 +203,10 @@ fn apply_common_args(config: &mut AppConfig, common: &CommonArgs) -> Result<()> 
     config
         .browser
         .set_subframe_loading_enabled(!common.disable_subframes);
+    config.browser.set_layout_policy(layout_policy);
     config
         .browser
-        .set_layout_policy(match (common.layout, common.layout_live) {
-            (false, _) => LayoutPolicy::Mock,
-            (true, true) => LayoutPolicy::Live,
-            (true, false) => LayoutPolicy::OnDemand,
-        });
-    config
-        .browser
-        .set_scrollbars_hidden(common.layout && !common.scrollbars);
+        .set_scrollbars_hidden(layout_policy.uses_real_layout() && !common.scrollbars);
     config.fetch.cookie_files = common.cookie_file.clone();
     config.browser.fetch_mut().set_network_blocking(
         common.block_private_networks,

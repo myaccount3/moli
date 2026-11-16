@@ -143,8 +143,7 @@ fn parses_explicit_fetch_command_with_compatibility_flags() {
                 text_track: false,
                 resource: false,
                 disable_subframes: false,
-                layout: false,
-                layout_live: false,
+                layout: None,
                 scrollbars: false,
                 cookie_file: Vec::new(),
                 document_start_script: Vec::new(),
@@ -1824,18 +1823,11 @@ fn layout_selects_on_demand_policy_for_fetch_and_serve() {
 
 #[test]
 fn layout_live_selects_live_policy_for_fetch_and_serve() {
-    for mut args in [
-        vec![
-            "moli",
-            "fetch",
-            "--layout",
-            "--layout-live",
-            "https://example.com",
-        ],
-        vec!["moli", "serve", "--layout", "--layout-live"],
+    for args in [
+        vec!["moli", "fetch", "--layout=live", "https://example.com"],
+        vec!["moli", "serve", "--layout=live"],
     ] {
-        let cli =
-            Cli::try_parse_from(normalize_args_for_compat(std::mem::take(&mut args))).unwrap();
+        let cli = Cli::try_parse_from(normalize_args_for_compat(args)).unwrap();
         let config = AppConfig::from_cli(&cli).unwrap();
         assert_eq!(
             config.browser.layout_policy(),
@@ -1845,17 +1837,40 @@ fn layout_live_selects_live_policy_for_fetch_and_serve() {
 }
 
 #[test]
-fn layout_live_requires_layout() {
-    let result = Cli::try_parse_from(normalize_args_for_compat(vec![
-        "moli",
-        "serve",
-        "--layout-live",
-    ]));
-    assert!(result.is_err(), "--layout-live without --layout must fail");
+fn layout_value_variants_select_policies() {
+    for (value, expected) in [
+        ("on-demand", moli_core::LayoutPolicy::OnDemand),
+        ("mock", moli_core::LayoutPolicy::Mock),
+        ("live", moli_core::LayoutPolicy::Live),
+        ("true", moli_core::LayoutPolicy::OnDemand),
+        ("1", moli_core::LayoutPolicy::OnDemand),
+        ("false", moli_core::LayoutPolicy::Mock),
+        ("0", moli_core::LayoutPolicy::Mock),
+    ] {
+        let flag = format!("--layout={value}");
+        let cli = Cli::try_parse_from(normalize_args_for_compat(vec![
+            "moli",
+            "serve",
+            flag.as_str(),
+        ]))
+        .unwrap();
+        let config = AppConfig::from_cli(&cli).unwrap();
+        assert_eq!(config.browser.layout_policy(), expected, "--layout={value}");
+    }
 }
 
 #[test]
-fn layout_without_live_keeps_on_demand_policy() {
+fn layout_unknown_value_is_rejected() {
+    let result = Cli::try_parse_from(normalize_args_for_compat(vec![
+        "moli",
+        "serve",
+        "--layout=bogus",
+    ]));
+    assert!(result.is_err(), "unknown layout value must fail");
+}
+
+#[test]
+fn layout_without_value_keeps_on_demand_policy() {
     let cli =
         Cli::try_parse_from(normalize_args_for_compat(vec!["moli", "serve", "--layout"])).unwrap();
     let config = AppConfig::from_cli(&cli).unwrap();
@@ -2104,7 +2119,7 @@ fn parse_env_flags_in_child_process() {
             Commands::Serve(args) => args.common,
             Commands::Import(_) => panic!("expected fetch or serve command"),
         };
-        assert_eq!(common.layout, expected);
+        assert_eq!(config.browser.layout_policy().uses_real_layout(), expected);
         assert_eq!(common.scrollbars, expected_scrollbars);
         assert_eq!(common.resource, expected);
         assert_eq!(common.block_private_networks, expected);
